@@ -8,7 +8,7 @@ export const createEmployee = async (req, res) => {
         return
     }
     try {
-        const newEmployee = await employeeService.createEmployee({
+        const newEmployee = await employeeService.createNewEmployee({
             name,
             email,
             role,
@@ -29,13 +29,31 @@ export const createEmployee = async (req, res) => {
 }
 export const getEmployee = async (req, res) => {
     try {
-        const employees = await employeeService.getEmployee()
+        const employees = await employeeService.listAllEmployees()
         return res.status(200).json({ 
             Message: 'Funcionarios recuperados com sucesso.', 
             employees
          })
     } catch(Exception){
         console.error('Erro ao buscar Funcionario', Exception.message)
+        return res.status(500).json({ Error: 'Erro interno do servidor.' })
+    }
+}
+
+export const employeeById = async (req, res) => {
+    const { id } = req.params
+    
+    try {
+
+        const employee = await employeeService.getEmployeeById(id)
+        
+        return res.status(200).json({ 
+            Message: 'Funcionario recuperado com sucesso.', 
+            employee
+         })
+
+    } catch(Exception){
+        console.error('Erro ao recuperar Funcionario', Exception.message)        
         return res.status(500).json({ Error: 'Erro interno do servidor.' })
     }
 }
@@ -83,15 +101,15 @@ export const deleteEmployee = async (req, res) => {
     const { id } = req.params
 
     try {
-        const deleteEmployee = await employeeService.getEmployeeById(id)
+        const employee = await employeeService.getEmployeeById(id)
 
-        if(!deleteEmployee) {
+        if(!employee) {
             return res.status(404).json({ Message: 'Nenhum colaborador encontrado com o ID informado.' })
         }
 
-        return res.status(200).json({ 
-            Message: 'Colaborador excluido da base de dados com sucesso.'
-         })
+        await employeeService.deleteEmployee(id)
+
+        return res.status(200).json(deleteEmployee)
          
     } catch(Exception) {
         console.error('Erro ao Deletar colaborador da base de dados:', Exception.message)
