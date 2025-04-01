@@ -1,4 +1,5 @@
 import prisma from '../../../prisma/prismaClient.js '
+import bcrypt from 'bcrypt'
 
 export const createNewEmployee = async(data) => {
     const { name, email, role, salary, admissionDate, phone, password } = data
@@ -23,6 +24,19 @@ export const createNewEmployee = async(data) => {
     return newEmployee
 }
 
+export const getEmployeeById = async (id) => {
+    try {
+        const employee = await prisma.employee.findUnique({
+            where: {
+                id: id 
+            }
+        })
+        return employee
+    } catch (error) {
+        throw new Error('Erro ao buscar colaborador pelo ID: ' + error.message)
+    }
+}
+
 export const updateEmployee = async (id, data) => {
     const employee = await prisma.employee.findUnique({ where: { id}})
     if(!employee) {
@@ -42,14 +56,16 @@ export const updateEmployee = async (id, data) => {
 }
 
 export const deleteEmployee = async (id) => {
-    const employee = await prisma.employee.findUnique({ where: { id }})
-
-    if(!employee) {
-        return null
+    try {
+        const deleteEmployee = await prisma.employee.delete({ 
+            where: { 
+                id: id 
+            }
+        })
+        return deleteEmployee
+    } catch(Exception) {
+        throw new Error('Erro ao exluir colaborador:', Exception.message)
     }
-
-    await prisma.employee.delete({ where: { id }})
-    return  { Message: 'Colaborador excluido da base de dados.' }
 }
 
 export const listAllEmployees = async () => {
