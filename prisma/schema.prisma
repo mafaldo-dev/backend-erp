@@ -24,6 +24,8 @@ model Employee {
   phone       String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @default(now()) @updatedAt
+  orders      Order[]
+
 }
 
 model CustomerData {
@@ -68,11 +70,13 @@ model Product {
 model Order {
   id          String    @id @default(uuid())
   customerId  String
+  employeeId  String   
   totalAmount Float
   status      String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 
+  employee    Employee?     @relation(fields: [employeeId], references: [id])
   customer    CustomerData @relation(fields: [customerId], references: [id])
   items       OrderItem[]
   payments    Payment[]
@@ -80,12 +84,13 @@ model Order {
 
 model OrderItem {
   id        String   @id @default(uuid())
-  orderId   String
-  productId String
+  orderId   String?
+  productId  String
+  name  String
   quantity  Int
   unitPrice Float
 
-  order     Order    @relation(fields: [orderId], references: [id])
+  order     Order?    @relation(fields: [orderId], references: [id])
   product   Product  @relation(fields: [productId], references: [id])
 }
 
