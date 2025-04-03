@@ -93,7 +93,9 @@ model Payment {
   id        String   @id @default(uuid())
   orderId   String
   amount    Float
-  status    String
+  status    String @default("pendente")
+  method    String
+  trasactionId String?
   createdAt DateTime @default(now())
 
   order     Order    @relation(fields: [orderId], references: [id])
