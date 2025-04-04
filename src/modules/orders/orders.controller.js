@@ -1,5 +1,10 @@
 import service from './orders.service.js';
 
+
+  // ==========================================
+  // INITIAL ORDER 
+  // ==
+
 export default {
   async addItem(req, res) {
     try {
@@ -50,7 +55,7 @@ export default {
       
       const { customerId, employeeId, paymentMethod } = req.body;
 
-      const order = await service.createOrderWithItems({
+      const order = await service.createFinalOrder({
         customerId,
         employeeId,
         paymentMethod

@@ -1,39 +1,59 @@
 import prisma from '../../../prisma/prismaClient.js';
 
 export default {
-    /**
-     * Cria um item temporário (ainda não vinculado a um pedido)
-     */
-    async createOrderItem({ productId, quantity, unitPrice }) {
+  async createOrderItem({ productId, quantity, unitPrice, paymentMethod, employeeId, customerId }) {      
       const product = await prisma.product.findUnique({ 
-        where: { id: productId },
-        select: { name: true, stock: true, price: true }
+          where: { id: productId },
+          select: { name: true, stock: true, price: true }
       });
-  
+
+      const customer = await prisma.customerData.findUnique({ 
+          where: { id: customerId },
+          select: { name: true }
+      });
+
+      const employee = await prisma.employee.findUnique({ 
+          where: { id: employeeId },
+          select: { name: true }
+      });
+
       if (!product) throw new Error('Produto não existe');
       if (product.stock < quantity) throw new Error('Estoque insuficiente');
-  
+      if (!customer) throw new Error('Cliente não encontrado');
+      if (!employee) throw new Error('Funcionário não encontrado');
+
       return await prisma.orderItem.create({
-        data: {
-          productId,
-          quantity,
-          unitPrice: unitPrice || product.price, // Usa o preço do produto se não informado
-          name: product.name
-        },
-        select: { id: true, name: true, quantity: true, unitPrice: true }
+          data: {
+              name: product.name,
+              productId,
+              quantity,
+              unitPrice: unitPrice || product.price,
+              paymentMethod,
+              employeeName: employee.name,
+              customerName: customer.name
+          },
+          select: { 
+              id: true, 
+              name: true,
+              quantity: true, 
+              unitPrice: true, 
+              paymentMethod: true,
+              employeeName: true,
+              customerName: true,
+          }
       });
-    },
+  },
 
   async updateOrderItem(id, data) {
-    const { quantity, unitPrice } = data;
+    const { quantity, unitPrice, paymentMethod } = data;
     
     if (quantity <= 0) throw new Error('Quantidade inválida');
     if (unitPrice <= 0) throw new Error('Preço inválido');
 
     return await prisma.orderItem.update({
       where: { id },
-      data: { quantity, unitPrice },
-      select: { id: true, name: true, quantity: true, unitPrice: true }
+      data: { quantity, unitPrice, paymentMethod },
+      select: { id: true, name: true, quantity: true, unitPrice: true, paymentMethod: true }
     });
   },
 
@@ -58,6 +78,9 @@ export default {
         name: true,
         quantity: true,
         unitPrice: true,
+        paymentMethod: true,
+        employeeName: true,
+        customerName: true,
         product: { select: { id: true, image: true } }
       }
     });
@@ -66,102 +89,96 @@ export default {
   // ======================
   // Order Services
   // ======================
+    async createFinalOrder(orderId, customerId, employeeId, ) {
+        if (!orderId) throw new Error('O orderId é obrigatório');
 
-  async createOrderWithItems({ customerId, employeeId, paymentMethod }) {
-    // Validações iniciais
-    if (!employeeId) throw new Error('ID do funcionário é obrigatório');
-    if (!customerId) throw new Error('ID do cliente é obrigatório');
-    if (!paymentMethod) throw new Error('Método de pagamento é obrigatório');
+        const customer = await prisma.customerData.findUnique({ 
+            where: { id: customerId},
+            select: { name: true }
+        });
+        console.log(customer)
 
-    // Verifica existência das entidades relacionadas
-    const [employeeExists, customerExists, items] = await Promise.all([
-        prisma.employee.findUnique({
+        const employee = await prisma.employee.findUnique({ 
             where: { id: employeeId },
-            select: { id: true }
-        }),
-        prisma.customerData.findUnique({
-            where: { id: customerId },
-            select: { id: true }
-        }),
-        prisma.orderItem.findMany({
-            where: { orderId: null },
-            include: { product: true }
-        })
-    ]);
-
-    if (!employeeExists) throw new Error('Funcionário não encontrado');
-    if (!customerExists) throw new Error('Cliente não encontrado');
-    if (items.length === 0) throw new Error('Nenhum item no carrinho');
-
-    // Cálculos financeiros
-    const subtotal = items.reduce((total, item) => {
-        return total + (item.quantity * item.unitPrice);
-    }, 0);
-
-    const taxRate = 0.1; // 10% de imposto
-    const taxAmount = subtotal * taxRate;
-    const totalAmount = subtotal + taxAmount;
-
-    // Transação atômica
-    return await prisma.$transaction(async (tx) => {
-        // Cria o pedido
-        const order = await tx.order.create({
-            data: {
-                customer: { connect: { id: customerId } },
-                employee: { connect: { id: employeeId } },
-                paymentMethod,
-                subtotal,
-                taxAmount,
-                totalAmount,
-                status: 'PENDING',
-                issueDate: new Date()
-            },
-            include: {
-                customer: {
-                    select: {
-                        id: true,
-                        name: true
-                    }
-                },
-                employee: {
-                    select: {
-                        id: true,
-                        name: true
-                    }
-                }
-            }
+            select: { id: true, name: true }
         });
 
-        // Vincula os itens ao pedido
-        await tx.orderItem.updateMany({
-            where: { id: { in: items.map(item => item.id) } },
-            data: { orderId: order.id }
-        });
-
-        // Atualiza estoque dos produtos
-        await Promise.all(items.map(item => {
-            return tx.product.update({
-                where: { id: item.productId },
-                data: { 
-                    stock: { decrement: item.quantity },
-                    updatedAt: new Date()
+        return await prisma.$transaction(async (tx) => {
+            // 1. Busca todos os OrderItems com o orderId fornecido
+            const orderItems = await tx.orderItem.findMany({
+                where: { id: orderId },
+                include: {
+                    product: {
+                        select: { id: true, image: true, stock: true }
+                    }
                 }
             });
-        }));
 
-        // Retorna o pedido com informações básicas
-        return {
-            ...order,
-            items: items.map(item => ({
-                id: item.id,
-                name: item.name,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice
-            }))
-        };
-    });
-},
+            if (orderItems.length === 0) {
+                throw new Error('Nenhum item encontrado para este orderId');
+            }
 
+            // 3. Calcula os valores totais
+            const subtotal = orderItems.reduce((total, item) => total + (item.quantity * item.unitPrice), 0);
+            const taxRate = 0.1; // Exemplo: 10% de imposto
+            const taxAmount = subtotal * taxRate;
+            const totalAmount = subtotal + taxAmount;
+
+            // 4. Cria a Order final
+            const finalOrder = await tx.order.create({
+                data: {
+                    id: orderId,
+                    customerId: customer.id,
+                    employeeId: employee.id,
+                    subtotal,
+                    taxAmount,
+                    totalAmount,
+                    status: 'COMPLETED',
+                    createdAt: new Date(),
+                    items: {
+                        connect: orderItems.map(item => ({ id: item.id })) // Conecta os OrderItems já existentes
+                    }
+                },
+                include: {
+                    items: {
+                        include: {
+                            product: {
+                                select: { id: true, image: true }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 5. Atualiza o estoque dos produtos
+            await Promise.all(orderItems.map(item => {
+                if (item.product.stock < item.quantity) {
+                    throw new Error(`Estoque insuficiente para o produto ${item.product.id}`);
+                }
+                return tx.product.update({
+                    where: { id: item.product.id },
+                    data: {
+                        stock: { decrement: item.quantity }
+                    }
+                });
+            }));
+
+            return {
+                ...finalOrder,
+                items: finalOrder.items.map(item => ({
+                    id: item.id,
+                    name: item.name,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    paymentMethod: item.paymentMethod,
+                    product: {
+                        id: item.product.id,
+                        image: item.product.image
+                    }
+                }))
+            };
+        });
+    },
 
   async updateOrder(id, data) {
     const validStatuses = ['PENDING', 'PROCESSING', 'COMPLETED', 'CANCELLED'];

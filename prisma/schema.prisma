@@ -24,7 +24,6 @@ model Employee {
   phone       String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @default(now()) @updatedAt
-  orders      Order[]
 
 }
 
@@ -38,7 +37,6 @@ model CustomerData {
   updatedAt   DateTime       @default(now()) @updatedAt
 
   addresses   CustomerAddress[]
-  orders      Order[]
 }
 
 model CustomerAddress {
@@ -69,39 +67,39 @@ model Product {
 
 model Order {
   id          String    @id @default(uuid())
-  customerId  String
-  employeeId  String   
-  totalAmount Float
+  customerId   String
+  employeeId   String
+  paymentId    String?
+  subtotal     Float
+  totalAmount  Float
+  taxAmount    Float
   status      String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 
-  employee    Employee?     @relation(fields: [employeeId], references: [id])
-  customer    CustomerData @relation(fields: [customerId], references: [id])
   items       OrderItem[]
-  payments    Payment[]
 }
 
 model OrderItem {
   id        String   @id @default(uuid())
-  orderId   String?
-  productId  String
-  name  String
-  quantity  Int
-  unitPrice Float
+  orderId      String?
+  productId    String
+  quantity    Int
+  unitPrice   Float
+  name      String  @default("produto desconhecido")
+  employeeName String? @default("funcionário desconhecido")
+  customerName String? @default("cliente desconhecido")
 
+  paymentMethod   PaymentMethod[]
+  
   order     Order?    @relation(fields: [orderId], references: [id])
   product   Product  @relation(fields: [productId], references: [id])
 }
 
-model Payment {
-  id        String   @id @default(uuid())
-  orderId   String
-  amount    Float
-  status    String @default("pendente")
-  method    String
-  trasactionId String?
-  createdAt DateTime @default(now())
-
-  order     Order    @relation(fields: [orderId], references: [id])
+enum PaymentMethod {
+  CREDIT
+  DEBIT
+  PIX
+  CASH
+  BOLETO
 }
